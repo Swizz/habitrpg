@@ -44,6 +44,7 @@ auth = (req, res, next) ->
     return res.json 401, NO_USER_FOUND if !req.userObj || _.isEmpty(req.userObj)
     req._isServer = true
     next()
+
 ###
   GET /user
 ###
@@ -59,6 +60,32 @@ router.get '/user', auth, (req, res) ->
     delete user.auth.salt
 
   res.json user
+
+###
+  TODO POST /user
+  when a put attempt didn't work, create a new one with POST
+###
+
+###
+  PUT /user
+###
+router.put '/user', auth, (req, res) ->
+  user = req.user
+  partialUser = req.body.user
+
+  protectedAttrs = ['id', 'apiToken', 'auth', 'dailyIds', 'habitIds', 'rewardIds', 'todoIds', 'update__']
+  protectedAttrs.push 'tasks' # we'll be handling tasks separately
+
+  _.each partialUser, (val, key) ->
+    user.set(key, val) unless key in protectedAttrs
+
+  req.body = partialUser.tasks
+  updateTasks req
+
+  userObj = user.get()
+  [tasks, req.body] = [req.body, userObj]
+
+  res.json 201, req.body
 
 ###
   GET /user/task/:id
@@ -125,7 +152,7 @@ router.delete '/user/task/:id', auth, validateTask, (req, res) ->
 ###
   POST /user/tasks
 ###
-router.post '/user/tasks', auth, (req, res) ->
+updateTasks = (req, res) ->
   for idx, task of req.body
     if task.id
       if task.del
@@ -141,6 +168,8 @@ router.post '/user/tasks', auth, (req, res) ->
       model.at("_#{type}List").push task
     req.body[idx] = task
 
+router.post '/user/tasks', auth, (req, res) ->
+  updateTasks req, res
   res.json 201, req.body
 
 
